@@ -1,15 +1,14 @@
 package jadx.gui;
 
+import javax.swing.*;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import jadx.gui.settings.JadxSettings;
 import jadx.gui.settings.JadxSettingsAdapter;
 import jadx.gui.ui.MainWindow;
 import jadx.gui.utils.LogCollector;
-
-import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class JadxGUI {
 	private static final Logger LOG = LoggerFactory.getLogger(JadxGUI.class);
@@ -17,20 +16,18 @@ public class JadxGUI {
 	public static void main(String[] args) {
 		try {
 			LogCollector.register();
-			final JadxSettings jadxArgs = JadxSettingsAdapter.load();
+			final JadxSettings settings = JadxSettingsAdapter.load();
 			// overwrite loaded settings by command line arguments
-			if (!jadxArgs.processArgs(args)) {
+			if (!settings.processArgs(args)) {
 				return;
 			}
 			UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-			SwingUtilities.invokeLater(new Runnable() {
-				public void run() {
-					MainWindow window = new MainWindow(jadxArgs);
-					window.open();
-				}
+			SwingUtilities.invokeLater(() -> {
+				MainWindow window = new MainWindow(settings);
+				window.open();
 			});
-		} catch (Throwable e) {
-			LOG.error("Error: {}", e.getMessage());
+		} catch (Exception e) {
+			LOG.error("Error: {}", e.getMessage(), e);
 			System.exit(1);
 		}
 	}

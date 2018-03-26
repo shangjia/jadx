@@ -80,6 +80,10 @@ public class MethodGen {
 		if (clsAccFlags.isAnnotation()) {
 			ai = ai.remove(AccessFlags.ACC_PUBLIC);
 		}
+
+		if (mth.getMethodInfo().isRenamed()) {
+			code.startLine("/* renamed from: ").add(mth.getName()).add(" */");
+		}
 		code.startLineWithNum(mth.getSourceLine());
 		code.add(ai.makeString());
 
@@ -129,7 +133,7 @@ public class MethodGen {
 				annotationGen.addForParameter(argsCode, paramsAnnotation, i);
 			}
 			SSAVar argSVar = arg.getSVar();
-			if (argSVar!= null && argSVar.contains(AFlag.FINAL)) {
+			if (argSVar != null && argSVar.contains(AFlag.FINAL)) {
 				argsCode.add("final ");
 			}
 			if (!it.hasNext() && mth.getAccessFlags().isVarArgs()) {
@@ -241,7 +245,7 @@ public class MethodGen {
 	 * Return fallback variant of method codegen
 	 */
 	public static MethodGen getFallbackMethodGen(MethodNode mth) {
-		ClassGen clsGen = new ClassGen(mth.getParentClass(), null, true, true);
+		ClassGen clsGen = new ClassGen(mth.getParentClass(), null, true, true, true);
 		return new MethodGen(clsGen, mth);
 	}
 

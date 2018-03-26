@@ -30,13 +30,13 @@ public class ConvertToClsSet {
 		}
 		File output = new File(args[0]);
 
-		List<InputFile> inputFiles = new ArrayList<InputFile>(args.length - 1);
+		List<InputFile> inputFiles = new ArrayList<>(args.length - 1);
 		for (int i = 1; i < args.length; i++) {
 			File f = new File(args[i]);
 			if (f.isDirectory()) {
 				addFilesFromDirectory(f, inputFiles);
 			} else {
-				inputFiles.add(new InputFile(f));
+				InputFile.addFilesFrom(f, inputFiles);
 			}
 		}
 		for (InputFile inputFile : inputFiles) {
@@ -53,8 +53,7 @@ public class ConvertToClsSet {
 		LOG.info("done");
 	}
 
-	private static void addFilesFromDirectory(File dir,
-			List<InputFile> inputFiles) throws IOException, DecodeException {
+	private static void addFilesFromDirectory(File dir, List<InputFile> inputFiles) {
 		File[] files = dir.listFiles();
 		if (files == null) {
 			return;
@@ -62,14 +61,13 @@ public class ConvertToClsSet {
 		for (File file : files) {
 			if (file.isDirectory()) {
 				addFilesFromDirectory(file, inputFiles);
-			}
-			String fileName = file.getName();
-			if (fileName.endsWith(".dex")
-					|| fileName.endsWith(".jar")
-					|| fileName.endsWith(".apk")) {
-				inputFiles.add(new InputFile(file));
+			} else {
+				try {
+					InputFile.addFilesFrom(file, inputFiles);
+				} catch (Exception e) {
+					LOG.warn("Skip file: {}, load error: {}", file, e.getMessage());
+				}
 			}
 		}
 	}
-
 }

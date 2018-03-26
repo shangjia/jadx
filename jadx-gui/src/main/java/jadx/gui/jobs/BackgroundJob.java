@@ -1,8 +1,5 @@
 package jadx.gui.jobs;
 
-import jadx.gui.JadxWrapper;
-
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -13,8 +10,10 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import jadx.gui.JadxWrapper;
+
 public abstract class BackgroundJob {
-	private static final Logger LOG = LoggerFactory.getLogger(DecompileJob.class);
+	private static final Logger LOG = LoggerFactory.getLogger(BackgroundJob.class);
 
 	protected final JadxWrapper wrapper;
 	private final ThreadPoolExecutor executor;
@@ -39,13 +38,10 @@ public abstract class BackgroundJob {
 
 	private class ShutdownTask extends FutureTask<Boolean> {
 		public ShutdownTask() {
-			super(new Callable<Boolean>() {
-				@Override
-				public Boolean call() throws Exception {
-					runJob();
-					executor.shutdown();
-					return executor.awaitTermination(5, TimeUnit.MINUTES);
-				}
+			super(() -> {
+				runJob();
+				executor.shutdown();
+				return executor.awaitTermination(1, TimeUnit.HOURS);
 			});
 		}
 

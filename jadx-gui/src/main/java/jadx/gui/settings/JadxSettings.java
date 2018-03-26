@@ -1,9 +1,6 @@
 package jadx.gui.settings;
 
-import jadx.cli.JadxCLIArgs;
-
-import java.awt.Font;
-import java.awt.Window;
+import java.awt.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -14,6 +11,9 @@ import java.util.Set;
 
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
+import jadx.api.JadxArgs;
+import jadx.cli.JadxCLIArgs;
+
 public class JadxSettings extends JadxCLIArgs {
 
 	private static final String USER_HOME = System.getProperty("user.home");
@@ -21,20 +21,19 @@ public class JadxSettings extends JadxCLIArgs {
 
 	private static final Font DEFAULT_FONT = new RSyntaxTextArea().getFont();
 
-	static final Set<String> SKIP_FIELDS = new HashSet<String>(Arrays.asList(
+	static final Set<String> SKIP_FIELDS = new HashSet<>(Arrays.asList(
 			"files", "input", "outputDir", "verbose", "printHelp"
 	));
 
 	private String lastOpenFilePath = USER_HOME;
 	private String lastSaveFilePath = USER_HOME;
 	private boolean flattenPackage = false;
-	private boolean checkForUpdates = true;
-	private List<String> recentFiles = new ArrayList<String>();
+	private boolean checkForUpdates = false;
+	private List<String> recentFiles = new ArrayList<>();
 	private String fontStr = "";
-	private boolean useFastSearch = false;
-	private boolean autoStartJobs = true;
+	private boolean autoStartJobs = false;
 
-	private Map<String, WindowLocation> windowPos = new HashMap<String, WindowLocation>();
+	private Map<String, WindowLocation> windowPos = new HashMap<>();
 
 	public JadxSettings() {
 		setSkipResources(true);
@@ -42,6 +41,12 @@ public class JadxSettings extends JadxCLIArgs {
 
 	public void sync() {
 		JadxSettingsAdapter.store(this);
+	}
+
+	public void fixOnLoad() {
+		if (threadsCount <= 0) {
+			threadsCount = JadxArgs.DEFAULT_THREADS_COUNT;
+		}
 	}
 
 	public String getLastOpenFilePath() {
@@ -161,17 +166,16 @@ public class JadxSettings extends JadxCLIArgs {
 		this.deobfuscationForceSave = deobfuscationForceSave;
 	}
 
-	public void setUseSourceNameAsClassAlias(boolean useSourceNameAsAlias) {
-		this.deobfuscationUseSourceNameAsAlias = useSourceNameAsAlias;
+	public void setDeobfuscationUseSourceNameAsAlias(boolean deobfuscationUseSourceNameAsAlias) {
+		this.deobfuscationUseSourceNameAsAlias = deobfuscationUseSourceNameAsAlias;
 	}
 
-	public boolean isUseFastSearch() {
-		return false;
-//		return useFastSearch;
+	public void setEscapeUnicode(boolean escapeUnicode) {
+		this.escapeUnicode = escapeUnicode;
 	}
 
-	public void setUseFastSearch(boolean useFastSearch) {
-		this.useFastSearch = useFastSearch;
+	public void setReplaceConsts(boolean replaceConsts) {
+		this.replaceConsts = replaceConsts;
 	}
 
 	public boolean isAutoStartJobs() {
@@ -180,6 +184,10 @@ public class JadxSettings extends JadxCLIArgs {
 
 	public void setAutoStartJobs(boolean autoStartJobs) {
 		this.autoStartJobs = autoStartJobs;
+	}
+
+	public void setExportAsGradleProject(boolean exportAsGradleProject) {
+		this.exportAsGradleProject = exportAsGradleProject;
 	}
 
 	public Font getFont() {

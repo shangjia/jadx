@@ -1,38 +1,40 @@
 package jadx.cli;
 
-import jadx.api.IJadxArgs;
-import jadx.api.JadxDecompiler;
-import jadx.core.utils.exceptions.JadxException;
-
-import java.io.File;
 import java.io.PrintStream;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.Appender;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterDescription;
 import com.beust.jcommander.ParameterException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class JadxCLIArgs implements IJadxArgs {
+import jadx.api.JadxArgs;
+import jadx.api.JadxDecompiler;
+import jadx.core.utils.exceptions.JadxException;
+import jadx.core.utils.files.FileUtils;
 
-	@Parameter(description = "<input file> (.dex, .apk, .jar or .class)")
-	protected List<String> files;
+public class JadxCLIArgs {
+
+	@Parameter(description = "<input file> (.apk, .dex, .jar or .class)")
+	protected List<String> files = new ArrayList<>(1);
 
 	@Parameter(names = {"-d", "--output-dir"}, description = "output directory")
-	protected String outDirName;
+	protected String outDir;
 
-	@Parameter(names = {"-j", "--threads-count"}, description = "processing threads count")
-	protected int threadsCount = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
+	@Parameter(names = {"-ds", "--output-dir-src"}, description = "output directory for sources")
+	protected String outDirSrc;
 
-	@Parameter(names = {"-f", "--fallback"}, description = "make simple dump (using goto instead of 'if', 'for', etc)")
-	protected boolean fallbackMode = false;
+	@Parameter(names = {"-dr", "--output-dir-res"}, description = "output directory for resources")
+	protected String outDirRes;
 
 	@Parameter(names = {"-r", "--no-res"}, description = "do not decode resources")
 	protected boolean skipResources = false;
@@ -40,17 +42,23 @@ public class JadxCLIArgs implements IJadxArgs {
 	@Parameter(names = {"-s", "--no-src"}, description = "do not decompile source code")
 	protected boolean skipSources = false;
 
+	@Parameter(names = {"-e", "--export-gradle"}, description = "save as android gradle project")
+	protected boolean exportAsGradleProject = false;
+
+	@Parameter(names = {"-j", "--threads-count"}, description = "processing threads count")
+	protected int threadsCount = JadxArgs.DEFAULT_THREADS_COUNT;
+
 	@Parameter(names = {"--show-bad-code"}, description = "show inconsistent code (incorrectly decompiled)")
 	protected boolean showInconsistentCode = false;
 
-	@Parameter(names = {"--cfg"}, description = "save methods control flow graph to dot file")
-	protected boolean cfgOutput = false;
+	@Parameter(names = {"--no-imports"}, description = "disable use of imports, always write entire package name")
+	protected boolean useImports = true;
 
-	@Parameter(names = {"--raw-cfg"}, description = "save methods control flow graph (use raw instructions)")
-	protected boolean rawCfgOutput = false;
+	@Parameter(names = "--no-replace-consts", description = "don't replace constant value with matching constant field")
+	protected boolean replaceConsts = true;
 
-	@Parameter(names = {"-v", "--verbose"}, description = "verbose output")
-	protected boolean verbose = false;
+	@Parameter(names = {"--escape-unicode"}, description = "escape non latin characters in strings (with \\u)")
+	protected boolean escapeUnicode = false;
 
 	@Parameter(names = {"--deobf"}, description = "activate deobfuscation")
 	protected boolean deobfuscationOn = false;
@@ -67,11 +75,23 @@ public class JadxCLIArgs implements IJadxArgs {
 	@Parameter(names = {"--deobf-use-sourcename"}, description = "use source file name as class name alias")
 	protected boolean deobfuscationUseSourceNameAsAlias = false;
 
+	@Parameter(names = {"--cfg"}, description = "save methods control flow graph to dot file")
+	protected boolean cfgOutput = false;
+
+	@Parameter(names = {"--raw-cfg"}, description = "save methods control flow graph (use raw instructions)")
+	protected boolean rawCfgOutput = false;
+
+	@Parameter(names = {"-f", "--fallback"}, description = "make simple dump (using goto instead of 'if', 'for', etc)")
+	protected boolean fallbackMode = false;
+
+	@Parameter(names = {"-v", "--verbose"}, description = "verbose output")
+	protected boolean verbose = false;
+
+	@Parameter(names = {"--version"}, description = "print jadx version")
+	protected boolean printVersion = false;
+
 	@Parameter(names = {"-h", "--help"}, description = "print this help", help = true)
 	protected boolean printHelp = false;
-
-	private final List<File> input = new ArrayList<File>(1);
-	private File outputDir;
 
 	public boolean processArgs(String[] args) {
 		return parse(args) && process();
@@ -79,7 +99,7 @@ public class JadxCLIArgs implements IJadxArgs {
 
 	private boolean parse(String[] args) {
 		try {
-			new JCommander(this, args);
+			makeJCommander().parse(args);
 			return true;
 		} catch (ParameterException e) {
 			System.err.println("Arguments parse error: " + e.getMessage());
@@ -88,36 +108,31 @@ public class JadxCLIArgs implements IJadxArgs {
 		}
 	}
 
+	private JCommander makeJCommander() {
+		return JCommander.newBuilder().addObject(this).build();
+	}
+
 	private boolean process() {
-		if (isPrintHelp()) {
+		if (printHelp) {
 			printUsage();
+			return false;
+		}
+		if (printVersion) {
+			System.out.println(JadxDecompiler.getVersion());
 			return false;
 		}
 		try {
 			if (threadsCount <= 0) {
-				throw new JadxException("Threads count must be positive");
+				throw new JadxException("Threads count must be positive, got: " + threadsCount);
 			}
-			if (files != null) {
-				for (String fileName : files) {
-					File file = new File(fileName);
-					if (file.exists()) {
-						input.add(file);
-					} else {
-						throw new JadxException("File not found: " + file);
-					}
-				}
-			}
-			if (input.size() > 1) {
-				throw new JadxException("Only one input file is supported");
-			}
-			if (outDirName != null) {
-				outputDir = new File(outDirName);
-			}
-			if (isVerbose()) {
+			if (verbose) {
 				ch.qos.logback.classic.Logger rootLogger =
 						(ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
 				// remove INFO ThresholdFilter
-				rootLogger.getAppender("STDOUT").clearAllFilters();
+				Appender<ILoggingEvent> appender = rootLogger.getAppender("STDOUT");
+				if (appender != null) {
+					appender.clearAllFilters();
+				}
 			}
 		} catch (JadxException e) {
 			System.err.println("ERROR: " + e.getMessage());
@@ -128,7 +143,7 @@ public class JadxCLIArgs implements IJadxArgs {
 	}
 
 	public void printUsage() {
-		JCommander jc = new JCommander(this);
+		JCommander jc = makeJCommander();
 		// print usage in not sorted fields order (by default its sorted by description)
 		PrintStream out = System.out;
 		out.println();
@@ -138,7 +153,7 @@ public class JadxCLIArgs implements IJadxArgs {
 		out.println("options:");
 
 		List<ParameterDescription> params = jc.getParameters();
-		Map<String, ParameterDescription> paramsMap = new LinkedHashMap<String, ParameterDescription>(params.size());
+		Map<String, ParameterDescription> paramsMap = new LinkedHashMap<>(params.size());
 		int maxNamesLen = 0;
 		for (ParameterDescription p : params) {
 			paramsMap.put(p.getParameterized().getName(), p);
@@ -155,13 +170,13 @@ public class JadxCLIArgs implements IJadxArgs {
 				continue;
 			}
 			StringBuilder opt = new StringBuilder();
-			opt.append(' ').append(p.getNames());
+			opt.append("  ").append(p.getNames());
 			addSpaces(opt, maxNamesLen - opt.length() + 2);
 			opt.append("- ").append(p.getDescription());
 			out.println(opt);
 		}
 		out.println("Example:");
-		out.println(" jadx -d out classes.dex");
+		out.println("  jadx -d out classes.dex");
 	}
 
 	private static void addSpaces(StringBuilder str, int count) {
@@ -170,85 +185,112 @@ public class JadxCLIArgs implements IJadxArgs {
 		}
 	}
 
-	public List<File> getInput() {
-		return input;
+	public JadxArgs toJadxArgs() {
+		JadxArgs args = new JadxArgs();
+		args.setInputFiles(files.stream().map(FileUtils::toFile).collect(Collectors.toList()));
+		args.setOutDir(FileUtils.toFile(outDir));
+		args.setOutDirSrc(FileUtils.toFile(outDirSrc));
+		args.setOutDirRes(FileUtils.toFile(outDirRes));
+		args.setThreadsCount(threadsCount);
+		args.setSkipSources(skipSources);
+		args.setSkipResources(skipResources);
+		args.setFallbackMode(fallbackMode);
+		args.setShowInconsistentCode(showInconsistentCode);
+		args.setCfgOutput(cfgOutput);
+		args.setRawCFGOutput(rawCfgOutput);
+		args.setReplaceConsts(replaceConsts);
+		args.setDeobfuscationOn(deobfuscationOn);
+		args.setDeobfuscationForceSave(deobfuscationForceSave);
+		args.setDeobfuscationMinLength(deobfuscationMinLength);
+		args.setDeobfuscationMaxLength(deobfuscationMaxLength);
+		args.setUseSourceNameAsClassAlias(deobfuscationUseSourceNameAsAlias);
+		args.setEscapeUnicode(escapeUnicode);
+		args.setExportAsGradleProject(exportAsGradleProject);
+		args.setUseImports(useImports);
+		return args;
 	}
 
-	@Override
-	public File getOutDir() {
-		return outputDir;
+	public List<String> getFiles() {
+		return files;
 	}
 
-	public void setOutputDir(File outputDir) {
-		this.outputDir = outputDir;
+	public String getOutDir() {
+		return outDir;
 	}
 
-	public boolean isPrintHelp() {
-		return printHelp;
+	public String getOutDirSrc() {
+		return outDirSrc;
 	}
 
-	@Override
+	public String getOutDirRes() {
+		return outDirRes;
+	}
+
 	public boolean isSkipResources() {
 		return skipResources;
 	}
 
-	@Override
 	public boolean isSkipSources() {
 		return skipSources;
 	}
 
-	@Override
 	public int getThreadsCount() {
 		return threadsCount;
 	}
 
-	@Override
-	public boolean isCFGOutput() {
-		return cfgOutput;
-	}
-
-	@Override
-	public boolean isRawCFGOutput() {
-		return rawCfgOutput;
-	}
-
-	@Override
 	public boolean isFallbackMode() {
 		return fallbackMode;
 	}
 
-	@Override
 	public boolean isShowInconsistentCode() {
 		return showInconsistentCode;
 	}
 
-	@Override
-	public boolean isVerbose() {
-		return verbose;
+	public boolean isUseImports() {
+		return useImports;
 	}
 
-	@Override
 	public boolean isDeobfuscationOn() {
 		return deobfuscationOn;
 	}
 
-	@Override
 	public int getDeobfuscationMinLength() {
 		return deobfuscationMinLength;
 	}
 
-	@Override
 	public int getDeobfuscationMaxLength() {
 		return deobfuscationMaxLength;
 	}
 
-	@Override
 	public boolean isDeobfuscationForceSave() {
 		return deobfuscationForceSave;
 	}
 
-	@Override
-	public boolean useSourceNameAsClassAlias() {
+	public boolean isDeobfuscationUseSourceNameAsAlias() {
 		return deobfuscationUseSourceNameAsAlias;
+	}
+
+	public boolean escapeUnicode() {
+		return escapeUnicode;
+	}
+
+	public boolean isEscapeUnicode() {
+		return escapeUnicode;
+	}
+
+	public boolean isCfgOutput() {
+		return cfgOutput;
+	}
+
+	public boolean isRawCfgOutput() {
+		return rawCfgOutput;
+	}
+
+	public boolean isReplaceConsts() {
+		return replaceConsts;
+	}
+
+	public boolean isExportAsGradleProject() {
+		return exportAsGradleProject;
 	}
 }

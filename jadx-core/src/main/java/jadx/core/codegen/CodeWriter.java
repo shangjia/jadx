@@ -3,6 +3,7 @@ package jadx.core.codegen;
 import jadx.api.CodePosition;
 import jadx.core.dex.attributes.nodes.LineAttrNode;
 import jadx.core.utils.files.FileUtils;
+import jadx.core.utils.files.ZipSecurity;
 
 import java.io.File;
 import java.io.PrintWriter;
@@ -18,20 +19,19 @@ import org.slf4j.LoggerFactory;
 
 public class CodeWriter {
 	private static final Logger LOG = LoggerFactory.getLogger(CodeWriter.class);
-	private static final int MAX_FILENAME_LENGTH = 128;
 
 	public static final String NL = System.getProperty("line.separator");
-	public static final String INDENT = "    ";
+	public static final String INDENT_STR = "    ";
 
 	private static final boolean ADD_LINE_NUMBERS = false;
 
 	private static final String[] INDENT_CACHE = {
 			"",
-			INDENT,
-			INDENT + INDENT,
-			INDENT + INDENT + INDENT,
-			INDENT + INDENT + INDENT + INDENT,
-			INDENT + INDENT + INDENT + INDENT + INDENT,
+			INDENT_STR,
+			INDENT_STR + INDENT_STR,
+			INDENT_STR + INDENT_STR + INDENT_STR,
+			INDENT_STR + INDENT_STR + INDENT_STR + INDENT_STR,
+			INDENT_STR + INDENT_STR + INDENT_STR + INDENT_STR + INDENT_STR,
 	};
 
 	private StringBuilder buf = new StringBuilder();
@@ -126,7 +126,7 @@ public class CodeWriter {
 	}
 
 	public CodeWriter addIndent() {
-		add(INDENT);
+		add(INDENT_STR);
 		return this;
 	}
 
@@ -147,9 +147,9 @@ public class CodeWriter {
 		if (curIndent < INDENT_CACHE.length) {
 			this.indentStr = INDENT_CACHE[curIndent];
 		} else {
-			StringBuilder s = new StringBuilder(curIndent * INDENT.length());
+			StringBuilder s = new StringBuilder(curIndent * INDENT_STR.length());
 			for (int i = 0; i < curIndent; i++) {
-				s.append(INDENT);
+				s.append(INDENT_STR);
 			}
 			this.indentStr = s.toString();
 		}
@@ -208,7 +208,7 @@ public class CodeWriter {
 
 	private Object attachAnnotation(Object obj, CodePosition pos) {
 		if (annotations.isEmpty()) {
-			annotations = new HashMap<CodePosition, Object>();
+			annotations = new HashMap<>();
 		}
 		return annotations.put(pos, obj);
 	}
@@ -226,7 +226,7 @@ public class CodeWriter {
 
 	private void attachSourceLine(int decompiledLine, int sourceLine) {
 		if (lineMap.isEmpty()) {
-			lineMap = new TreeMap<Integer, Integer>();
+			lineMap = new TreeMap<>();
 		}
 		lineMap.put(decompiledLine, sourceLine);
 	}
@@ -273,10 +273,16 @@ public class CodeWriter {
 	}
 
 	public void save(File dir, String subDir, String fileName) {
+		if(!ZipSecurity.isValidZipEntryName(subDir) || !ZipSecurity.isValidZipEntryName(fileName)) {
+			return;
+		}
 		save(dir, new File(subDir, fileName).getPath());
 	}
 
 	public void save(File dir, String fileName) {
+		if(!ZipSecurity.isValidZipEntryName(fileName)) {
+			return;
+		}
 		save(new File(dir, fileName));
 	}
 
@@ -284,29 +290,11 @@ public class CodeWriter {
 		if (code == null) {
 			finish();
 		}
-		String name = file.getName();
-		if (name.length() > MAX_FILENAME_LENGTH) {
-			int dotIndex = name.indexOf('.');
-			int cutAt = MAX_FILENAME_LENGTH - name.length() + dotIndex - 1;
-			if (cutAt <= 0) {
-				name = name.substring(0, MAX_FILENAME_LENGTH - 1);
-			} else {
-				name = name.substring(0, cutAt) + name.substring(dotIndex);
-			}
-			file = new File(file.getParentFile(), name);
-		}
-
-		PrintWriter out = null;
-		try {
-			FileUtils.makeDirsForFile(file);
-			out = new PrintWriter(file, "UTF-8");
+		File outFile = FileUtils.prepareFile(file);
+		try (PrintWriter out = new PrintWriter(outFile, "UTF-8")) {
 			out.println(code);
 		} catch (Exception e) {
 			LOG.error("Save file error", e);
-		} finally {
-			if (out != null) {
-				out.close();
-			}
 		}
 	}
 }

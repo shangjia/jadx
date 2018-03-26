@@ -1,24 +1,9 @@
 package jadx.gui.ui;
 
-import jadx.gui.treemodel.JNode;
-import jadx.gui.utils.JumpManager;
-import jadx.gui.utils.NLS;
-import jadx.gui.utils.Position;
-import jadx.gui.utils.Utils;
-
-import javax.swing.BorderFactory;
-import javax.swing.ImageIcon;
-import javax.swing.JButton;
-import javax.swing.JLabel;
-import javax.swing.JMenuItem;
-import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
-import javax.swing.JTabbedPane;
-import javax.swing.SwingUtilities;
+import javax.swing.*;
 import javax.swing.plaf.basic.BasicButtonUI;
 import javax.swing.text.BadLocationException;
-import java.awt.Component;
-import java.awt.FlowLayout;
+import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
@@ -34,6 +19,15 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import jadx.api.ResourceFile;
+import jadx.api.ResourceType;
+import jadx.gui.treemodel.JNode;
+import jadx.gui.treemodel.JResource;
+import jadx.gui.utils.JumpManager;
+import jadx.gui.utils.NLS;
+import jadx.gui.utils.Position;
+import jadx.gui.utils.Utils;
+
 class TabbedPane extends JTabbedPane {
 
 	private static final Logger LOG = LoggerFactory.getLogger(TabbedPane.class);
@@ -42,9 +36,9 @@ class TabbedPane extends JTabbedPane {
 	private static final ImageIcon ICON_CLOSE = Utils.openIcon("cross");
 	private static final ImageIcon ICON_CLOSE_INACTIVE = Utils.openIcon("cross_grayed");
 
-	private final MainWindow mainWindow;
-	private final Map<JNode, ContentPanel> openTabs = new LinkedHashMap<JNode, ContentPanel>();
-	private JumpManager jumps = new JumpManager();
+	private final transient MainWindow mainWindow;
+	private final transient Map<JNode, ContentPanel> openTabs = new LinkedHashMap<>();
+	private transient JumpManager jumps = new JumpManager();
 
 	TabbedPane(MainWindow window) {
 		mainWindow = window;
@@ -72,23 +66,39 @@ class TabbedPane extends JTabbedPane {
 	}
 
 	private void showCode(final Position pos) {
-		final ContentPanel contentPanel = getCodePanel(pos.getNode());
+		final CodePanel contentPanel = (CodePanel) getContentPanel(pos.getNode());
+		if (contentPanel == null) {
+			return;
+		}
 		SwingUtilities.invokeLater(new Runnable() {
 			@Override
 			public void run() {
 				setSelectedComponent(contentPanel);
-				ContentArea contentArea = contentPanel.getContentArea();
+				CodeArea codeArea = contentPanel.getCodeArea();
 				int line = pos.getLine();
 				if (line < 0) {
 					try {
-						line = 1 + contentArea.getLineOfOffset(-line);
+						line = 1 + codeArea.getLineOfOffset(-line);
 					} catch (BadLocationException e) {
 						LOG.error("Can't get line for: {}", pos, e);
 						line = pos.getNode().getLine();
 					}
 				}
-				contentArea.scrollToLine(line);
-				contentArea.requestFocus();
+				codeArea.scrollToLine(line);
+				codeArea.requestFocus();
+			}
+		});
+	}
+
+	public void showResource(JResource res) {
+		final ContentPanel contentPanel = getContentPanel(res);
+		if (contentPanel == null) {
+			return;
+		}
+		SwingUtilities.invokeLater(new Runnable() {
+			@Override
+			public void run() {
+				setSelectedComponent(contentPanel);
 			}
 		});
 	}
@@ -105,10 +115,10 @@ class TabbedPane extends JTabbedPane {
 	@Nullable
 	private Position getCurrentPosition() {
 		ContentPanel selectedCodePanel = getSelectedCodePanel();
-		if (selectedCodePanel == null) {
-			return null;
+		if (selectedCodePanel instanceof CodePanel) {
+			return ((CodePanel) selectedCodePanel).getCodeArea().getCurrentPosition();
 		}
-		return selectedCodePanel.getContentArea().getCurrentPosition();
+		return null;
 	}
 
 	public void navBack() {
@@ -125,11 +135,7 @@ class TabbedPane extends JTabbedPane {
 		}
 	}
 
-	public JumpManager getJumpManager() {
-		return jumps;
-	}
-
-	private void addCodePanel(ContentPanel contentPanel) {
+	private void addContentPanel(ContentPanel contentPanel) {
 		openTabs.put(contentPanel.getNode(), contentPanel);
 		add(contentPanel);
 	}
@@ -139,14 +145,34 @@ class TabbedPane extends JTabbedPane {
 		remove(contentPanel);
 	}
 
-	private ContentPanel getCodePanel(JNode cls) {
-		ContentPanel panel = openTabs.get(cls);
+	@Nullable
+	private ContentPanel getContentPanel(JNode node) {
+		ContentPanel panel = openTabs.get(node);
 		if (panel == null) {
-			panel = new ContentPanel(this, cls);
-			addCodePanel(panel);
+			panel = makeContentPanel(node);
+			if (panel == null) {
+				return null;
+			}
+			addContentPanel(panel);
 			setTabComponentAt(indexOfComponent(panel), makeTabComponent(panel));
 		}
 		return panel;
+	}
+
+	@Nullable
+	private ContentPanel makeContentPanel(JNode node) {
+		if (node instanceof JResource) {
+			JResource res = (JResource) node;
+			ResourceFile resFile = res.getResFile();
+			if (resFile != null) {
+				if (resFile.getType() == ResourceType.IMG) {
+					return new ImagePanel(this, res);
+				}
+			} else {
+				return null;
+			}
+		}
+		return new CodePanel(this, node);
 	}
 
 	@Nullable
@@ -220,7 +246,7 @@ class TabbedPane extends JTabbedPane {
 			closeOther.addActionListener(new ActionListener() {
 				@Override
 				public void actionPerformed(ActionEvent e) {
-					List<ContentPanel> contentPanels = new ArrayList<ContentPanel>(openTabs.values());
+					List<ContentPanel> contentPanels = new ArrayList<>(openTabs.values());
 					for (ContentPanel panel : contentPanels) {
 						if (panel != contentPanel) {
 							closeCodePanel(panel);
@@ -263,7 +289,7 @@ class TabbedPane extends JTabbedPane {
 	}
 
 	public void closeAllTabs() {
-		List<ContentPanel> contentPanels = new ArrayList<ContentPanel>(openTabs.values());
+		List<ContentPanel> contentPanels = new ArrayList<>(openTabs.values());
 		for (ContentPanel panel : contentPanels) {
 			closeCodePanel(panel);
 		}
@@ -271,7 +297,7 @@ class TabbedPane extends JTabbedPane {
 
 	public void loadSettings() {
 		for (ContentPanel panel : openTabs.values()) {
-			panel.getContentArea().loadSettings();
+			panel.loadSettings();
 		}
 	}
 }

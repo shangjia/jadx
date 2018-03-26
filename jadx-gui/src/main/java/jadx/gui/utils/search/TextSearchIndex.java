@@ -1,5 +1,11 @@
 package jadx.gui.utils.search;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import jadx.api.JavaClass;
 import jadx.api.JavaField;
 import jadx.api.JavaMethod;
@@ -11,37 +17,25 @@ import jadx.gui.ui.CommonSearchDialog;
 import jadx.gui.utils.CodeLinesInfo;
 import jadx.gui.utils.JNodeCache;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 public class TextSearchIndex {
 
 	private static final Logger LOG = LoggerFactory.getLogger(TextSearchIndex.class);
 
 	private final JNodeCache nodeCache;
-	private final boolean useFastSearch;
 
 	private SearchIndex<JNode> clsNamesIndex;
 	private SearchIndex<JNode> mthNamesIndex;
 	private SearchIndex<JNode> fldNamesIndex;
 	private SearchIndex<CodeNode> codeIndex;
 
-	private List<JavaClass> skippedClasses = new ArrayList<JavaClass>();
+	private List<JavaClass> skippedClasses = new ArrayList<>();
 
-	public TextSearchIndex(JNodeCache nodeCache, boolean useFastSearch) {
+	public TextSearchIndex(JNodeCache nodeCache) {
 		this.nodeCache = nodeCache;
-		this.useFastSearch = useFastSearch;
-		this.clsNamesIndex = initIndex();
-		this.mthNamesIndex = initIndex();
-		this.fldNamesIndex = initIndex();
-		this.codeIndex = useFastSearch ? new SuffixTree<CodeNode>() : new CodeIndex<CodeNode>();
-	}
-
-	private <T> SearchIndex<T> initIndex() {
-		return useFastSearch ? new SuffixTree<T>() : new SimpleIndex<T>();
+		this.clsNamesIndex = new SimpleIndex<>();
+		this.mthNamesIndex = new SimpleIndex<>();
+		this.fldNamesIndex = new SimpleIndex<>();
+		this.codeIndex = new CodeIndex<>();
 	}
 
 	public void indexNames(JavaClass cls) {
@@ -79,27 +73,27 @@ public class TextSearchIndex {
 		}
 	}
 
-	public List<JNode> searchClsName(String text) {
-		return clsNamesIndex.getValuesForKeysContaining(text);
+	public List<JNode> searchClsName(String text, boolean caseInsensitive) {
+		return clsNamesIndex.getValuesForKeysContaining(text, caseInsensitive);
 	}
 
-	public List<JNode> searchMthName(String text) {
-		return mthNamesIndex.getValuesForKeysContaining(text);
+	public List<JNode> searchMthName(String text, boolean caseInsensitive) {
+		return mthNamesIndex.getValuesForKeysContaining(text, caseInsensitive);
 	}
 
-	public List<JNode> searchFldName(String text) {
-		return fldNamesIndex.getValuesForKeysContaining(text);
+	public List<JNode> searchFldName(String text, boolean caseInsensitive) {
+		return fldNamesIndex.getValuesForKeysContaining(text, caseInsensitive);
 	}
 
-	public List<CodeNode> searchCode(String text) {
+	public List<CodeNode> searchCode(String text, boolean caseInsensitive) {
 		List<CodeNode> items;
 		if (codeIndex.size() > 0) {
-			items = codeIndex.getValuesForKeysContaining(text);
+			items = codeIndex.getValuesForKeysContaining(text, caseInsensitive);
 			if (skippedClasses.isEmpty()) {
 				return items;
 			}
 		} else {
-			items = new ArrayList<CodeNode>();
+			items = new ArrayList<>();
 		}
 		addSkippedClasses(items, text);
 		return items;
@@ -112,7 +106,7 @@ public class TextSearchIndex {
 			while (pos != -1) {
 				pos = searchNext(list, text, javaClass, code, pos);
 			}
-			if (list.size() > CommonSearchDialog.MAX_RESULTS_COUNT) {
+			if (list.size() > CommonSearchDialog.RESULTS_PER_PAGE) {
 				return;
 			}
 		}

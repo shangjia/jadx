@@ -1,27 +1,38 @@
 language: java
 jdk:
     - oraclejdk8
-    - oraclejdk7
-    - openjdk6
+
+env:
+    - TERM=dumb
 
 before_install:
     - chmod +x gradlew
 
 script:
-    - TERM=dumb ./gradlew clean build dist
+    - sed -i " 1 s/.*/&-b$TRAVIS_BUILD_NUMBER-$(git rev-parse --short HEAD)/" version
+    - cat version
+    - sed -i "s/BUILD_VERSION/$(head -c -1 version)/g" bintray.json
+    - ./gradlew clean build
 
 after_success:
-    - TERM=dumb ./gradlew jacocoTestReport coveralls
+    - ./gradlew clean build jacocoTestReport
+    - bash <(curl -s https://codecov.io/bash) || echo "Codecov did not collect coverage reports"
+    - ./gradlew clean sonarqube -Dsonar.host.url=$SONAR_HOST -Dsonar.organization=$SONAR_ORG -Dsonar.login=$SONAR_TOKEN
+    - ./gradlew clean dist
+
+deploy:
+    provider: bintray
+    edge:
+      branch: v1.8.47
+    file: bintray.json
+    user: skylot
+    key: $BINTRAY_KEY
+    skip_cleanup: true
+    on:
+      branch: master
+      tags: false
 
 sudo: false
-
-cache:
-    directories:
-        - $HOME/.gradle/caches/
-        - $HOME/.gradle/wrapper/
-
-before_cache:
-    - rm -f $HOME/.gradle/caches/modules-2/modules-2.lock
 
 notifications:
     email:

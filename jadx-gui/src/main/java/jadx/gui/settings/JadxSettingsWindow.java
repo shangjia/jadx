@@ -1,31 +1,9 @@
 package jadx.gui.settings;
 
-import jadx.gui.ui.MainWindow;
-import jadx.gui.utils.NLS;
-import say.swing.JFontChooser;
-
-import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JComponent;
-import javax.swing.JDialog;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JSpinner;
-import javax.swing.SwingConstants;
-import javax.swing.WindowConstants;
+import javax.swing.*;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
-import java.awt.BorderLayout;
-import java.awt.Container;
-import java.awt.Dimension;
-import java.awt.Font;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
+import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
@@ -35,17 +13,21 @@ import java.awt.event.MouseEvent;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import say.swing.JFontChooser;
+
+import jadx.gui.ui.MainWindow;
+import jadx.gui.utils.NLS;
 
 public class JadxSettingsWindow extends JDialog {
 	private static final long serialVersionUID = -1804570470377354148L;
 
 	private static final Logger LOG = LoggerFactory.getLogger(JadxSettingsWindow.class);
 
-	private final MainWindow mainWindow;
-	private final JadxSettings settings;
-	private final String startSettings;
+	private final transient MainWindow mainWindow;
+	private final transient JadxSettings settings;
+	private final transient String startSettings;
 
-	private boolean needReload = false;
+	private transient boolean needReload = false;
 
 	public JadxSettingsWindow(MainWindow mainWindow, JadxSettings settings) {
 		this.mainWindow = mainWindow;
@@ -67,6 +49,8 @@ public class JadxSettingsWindow extends JDialog {
 		panel.setLayout(new BoxLayout(panel, BoxLayout.PAGE_AXIS));
 		panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 		panel.add(makeDeobfuscationGroup());
+		panel.add(makeDecompilationGroup());
+		panel.add(makeEditorGroup());
 		panel.add(makeOtherGroup());
 
 		JButton saveBtn = new JButton(NLS.str("preferences.save"));
@@ -161,10 +145,10 @@ public class JadxSettingsWindow extends JDialog {
 		});
 
 		JCheckBox deobfSourceAlias = new JCheckBox();
-		deobfSourceAlias.setSelected(settings.useSourceNameAsClassAlias());
+		deobfSourceAlias.setSelected(settings.isDeobfuscationUseSourceNameAsAlias());
 		deobfSourceAlias.addItemListener(new ItemListener() {
 			public void itemStateChanged(ItemEvent e) {
-				settings.setUseSourceNameAsClassAlias(e.getStateChange() == ItemEvent.SELECTED);
+				settings.setDeobfuscationUseSourceNameAsAlias(e.getStateChange() == ItemEvent.SELECTED);
 				needReload();
 			}
 		});
@@ -179,15 +163,29 @@ public class JadxSettingsWindow extends JDialog {
 		return deobfGroup;
 	}
 
-	private SettingsGroup makeOtherGroup() {
-		JCheckBox update = new JCheckBox();
-		update.setSelected(settings.isCheckForUpdates());
-		update.addItemListener(new ItemListener() {
-			public void itemStateChanged(ItemEvent e) {
-				settings.setCheckForUpdates(e.getStateChange() == ItemEvent.SELECTED);
+	private SettingsGroup makeEditorGroup() {
+		JButton fontBtn = new JButton(NLS.str("preferences.select_font"));
+		fontBtn.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(MouseEvent e) {
+				JFontChooser fontChooser = new JFontChooser();
+				fontChooser.setSelectedFont(settings.getFont());
+				int result = fontChooser.showDialog(JadxSettingsWindow.this);
+				if (result == JFontChooser.OK_OPTION) {
+					Font font = fontChooser.getSelectedFont();
+					LOG.info("Selected Font : {}", font);
+					settings.setFont(font);
+					mainWindow.updateFont(font);
+				}
 			}
 		});
 
+		SettingsGroup other = new SettingsGroup(NLS.str("preferences.editor"));
+		other.addRow(NLS.str("preferences.font"), fontBtn);
+		return other;
+	}
+
+	private SettingsGroup makeDecompilationGroup() {
 		JCheckBox fallback = new JCheckBox();
 		fallback.setSelected(settings.isFallbackMode());
 		fallback.addItemListener(new ItemListener() {
@@ -221,40 +219,7 @@ public class JadxSettingsWindow extends JDialog {
 			@Override
 			public void stateChanged(ChangeEvent e) {
 				settings.setThreadsCount((Integer) threadsCount.getValue());
-			}
-		});
-
-		JCheckBox cfg = new JCheckBox();
-		cfg.setSelected(settings.isCFGOutput());
-		cfg.addItemListener(new ItemListener() {
-			public void itemStateChanged(ItemEvent e) {
-				settings.setCfgOutput(e.getStateChange() == ItemEvent.SELECTED);
 				needReload();
-			}
-		});
-
-		JCheckBox rawCfg = new JCheckBox();
-		rawCfg.setSelected(settings.isRawCFGOutput());
-		rawCfg.addItemListener(new ItemListener() {
-			public void itemStateChanged(ItemEvent e) {
-				settings.setRawCfgOutput(e.getStateChange() == ItemEvent.SELECTED);
-				needReload();
-			}
-		});
-
-		JButton fontBtn = new JButton(NLS.str("preferences.select_font"));
-		fontBtn.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mouseClicked(MouseEvent e) {
-				JFontChooser fontChooser = new JFontChooser();
-				fontChooser.setSelectedFont(settings.getFont());
-				int result = fontChooser.showDialog(JadxSettingsWindow.this);
-				if (result == JFontChooser.OK_OPTION) {
-					Font font = fontChooser.getSelectedFont();
-					LOG.info("Selected Font : {}", font);
-					settings.setFont(font);
-					mainWindow.updateFont(font);
-				}
 			}
 		});
 
@@ -266,26 +231,66 @@ public class JadxSettingsWindow extends JDialog {
 			}
 		});
 
-		JCheckBox fastSearch = new JCheckBox();
-		fastSearch.setEnabled(false);
-		fastSearch.setSelected(settings.isUseFastSearch());
-		fastSearch.addItemListener(new ItemListener() {
+		JCheckBox escapeUnicode = new JCheckBox();
+		escapeUnicode.setSelected(settings.escapeUnicode());
+		escapeUnicode.addItemListener(new ItemListener() {
 			public void itemStateChanged(ItemEvent e) {
-				settings.setUseFastSearch(e.getStateChange() == ItemEvent.SELECTED);
+				settings.setEscapeUnicode(e.getStateChange() == ItemEvent.SELECTED);
+				needReload();
+			}
+		});
+
+		JCheckBox replaceConsts = new JCheckBox();
+		replaceConsts.setSelected(settings.isReplaceConsts());
+		replaceConsts.addItemListener(new ItemListener() {
+			public void itemStateChanged(ItemEvent e) {
+				settings.setReplaceConsts(e.getStateChange() == ItemEvent.SELECTED);
+				needReload();
+			}
+		});
+
+		SettingsGroup other = new SettingsGroup(NLS.str("preferences.decompile"));
+		other.addRow(NLS.str("preferences.threads"), threadsCount);
+		other.addRow(NLS.str("preferences.start_jobs"), autoStartJobs);
+		other.addRow(NLS.str("preferences.showInconsistentCode"), showInconsistentCode);
+		other.addRow(NLS.str("preferences.escapeUnicode"), escapeUnicode);
+		other.addRow(NLS.str("preferences.replaceConsts"), replaceConsts);
+		other.addRow(NLS.str("preferences.fallback"), fallback);
+		other.addRow(NLS.str("preferences.skipResourcesDecode"), resourceDecode);
+		return other;
+	}
+
+	private SettingsGroup makeOtherGroup() {
+		JCheckBox update = new JCheckBox();
+		update.setSelected(settings.isCheckForUpdates());
+		update.addItemListener(new ItemListener() {
+			public void itemStateChanged(ItemEvent e) {
+				settings.setCheckForUpdates(e.getStateChange() == ItemEvent.SELECTED);
+			}
+		});
+
+		JCheckBox cfg = new JCheckBox();
+		cfg.setSelected(settings.isCfgOutput());
+		cfg.addItemListener(new ItemListener() {
+			public void itemStateChanged(ItemEvent e) {
+				settings.setCfgOutput(e.getStateChange() == ItemEvent.SELECTED);
+				needReload();
+			}
+		});
+
+		JCheckBox rawCfg = new JCheckBox();
+		rawCfg.setSelected(settings.isRawCfgOutput());
+		rawCfg.addItemListener(new ItemListener() {
+			public void itemStateChanged(ItemEvent e) {
+				settings.setRawCfgOutput(e.getStateChange() == ItemEvent.SELECTED);
+				needReload();
 			}
 		});
 
 		SettingsGroup other = new SettingsGroup(NLS.str("preferences.other"));
 		other.addRow(NLS.str("preferences.check_for_updates"), update);
-		other.addRow(NLS.str("preferences.threads"), threadsCount);
-		other.addRow(NLS.str("preferences.fallback"), fallback);
-		other.addRow(NLS.str("preferences.showInconsistentCode"), showInconsistentCode);
-		other.addRow(NLS.str("preferences.skipResourcesDecode"), resourceDecode);
 		other.addRow(NLS.str("preferences.cfg"), cfg);
 		other.addRow(NLS.str("preferences.raw_cfg"), rawCfg);
-		other.addRow(NLS.str("preferences.font"), fontBtn);
-		other.addRow(NLS.str("preferences.fast_search"), fastSearch);
-		other.addRow(NLS.str("preferences.start_jobs"), autoStartJobs);
 		return other;
 	}
 
