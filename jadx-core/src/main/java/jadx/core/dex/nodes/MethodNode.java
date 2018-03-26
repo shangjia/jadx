@@ -44,7 +44,7 @@ import com.android.dex.Code;
 import com.android.dex.Code.CatchHandler;
 import com.android.dex.Code.Try;
 
-public class MethodNode extends LineAttrNode implements ILoadable {
+public class MethodNode extends LineAttrNode implements ILoadable, IDexNode {
 	private static final Logger LOG = LoggerFactory.getLogger(MethodNode.class);
 
 	private final MethodInfo mthInfo;
@@ -113,12 +113,12 @@ public class MethodNode extends LineAttrNode implements ILoadable {
 				load();
 				noCode = false;
 			}
-			throw new DecodeException(this, "Load method exception", e);
+			throw new DecodeException(this, "Load method exception: " + e.getMessage(), e);
 		}
 	}
 
 	public void checkInstructions() {
-		List<RegisterArg> list = new ArrayList<RegisterArg>();
+		List<RegisterArg> list = new ArrayList<>();
 		for (InsnNode insnNode : instructions) {
 			if (insnNode == null) {
 				continue;
@@ -216,7 +216,7 @@ public class MethodNode extends LineAttrNode implements ILoadable {
 			argsList = Collections.emptyList();
 			return;
 		}
-		argsList = new ArrayList<RegisterArg>(args.size());
+		argsList = new ArrayList<>(args.size());
 		for (ArgType arg : args) {
 			argsList.add(InsnArg.typeImmutableReg(pos, arg));
 			pos += arg.getRegCount();
@@ -225,7 +225,7 @@ public class MethodNode extends LineAttrNode implements ILoadable {
 
 	public List<RegisterArg> getArguments(boolean includeThis) {
 		if (includeThis && thisArg != null) {
-			List<RegisterArg> list = new ArrayList<RegisterArg>(argsList.size() + 1);
+			List<RegisterArg> list = new ArrayList<>(argsList.size() + 1);
 			list.add(thisArg);
 			list.addAll(argsList);
 			return list;
@@ -259,8 +259,8 @@ public class MethodNode extends LineAttrNode implements ILoadable {
 		}
 
 		int hc = 0;
-		Set<Integer> addrs = new HashSet<Integer>();
-		List<TryCatchBlock> catches = new ArrayList<TryCatchBlock>(catchBlocks.length);
+		Set<Integer> addrs = new HashSet<>();
+		List<TryCatchBlock> catches = new ArrayList<>(catchBlocks.length);
 
 		for (CatchHandler handler : catchBlocks) {
 			TryCatchBlock tcBlock = new TryCatchBlock();
@@ -399,8 +399,8 @@ public class MethodNode extends LineAttrNode implements ILoadable {
 	}
 
 	public void initBasicBlocks() {
-		blocks = new ArrayList<BlockNode>();
-		exitBlocks = new ArrayList<BlockNode>(1);
+		blocks = new ArrayList<>();
+		exitBlocks = new ArrayList<>(1);
 	}
 
 	public void finishBasicBlocks() {
@@ -437,7 +437,7 @@ public class MethodNode extends LineAttrNode implements ILoadable {
 
 	public void registerLoop(LoopInfo loop) {
 		if (loops.isEmpty()) {
-			loops = new ArrayList<LoopInfo>(5);
+			loops = new ArrayList<>(5);
 		}
 		loop.setId(loops.size());
 		loops.add(loop);
@@ -460,7 +460,7 @@ public class MethodNode extends LineAttrNode implements ILoadable {
 		if (loops.isEmpty()) {
 			return Collections.emptyList();
 		}
-		List<LoopInfo> list = new ArrayList<LoopInfo>(loops.size());
+		List<LoopInfo> list = new ArrayList<>(loops.size());
 		for (LoopInfo loop : loops) {
 			if (loop.getLoopBlocks().contains(block)) {
 				list.add(loop);
@@ -479,7 +479,7 @@ public class MethodNode extends LineAttrNode implements ILoadable {
 
 	public ExceptionHandler addExceptionHandler(ExceptionHandler handler) {
 		if (exceptionHandlers.isEmpty()) {
-			exceptionHandlers = new ArrayList<ExceptionHandler>(2);
+			exceptionHandlers = new ArrayList<>(2);
 		} else {
 			for (ExceptionHandler h : exceptionHandlers) {
 				if (h == handler || h.getHandleOffset() == handler.getHandleOffset()) {
@@ -528,7 +528,7 @@ public class MethodNode extends LineAttrNode implements ILoadable {
 		boolean result = false;
 		if (accFlags.isConstructor() && mthInfo.isConstructor()) {
 			int defaultArgCount = 0;
-			/** workaround for non-static inner class constructor, that has synthetic argument */
+			// workaround for non-static inner class constructor, that has synthetic argument
 			if (parentClass.getClassInfo().isInner()
 					&& !parentClass.getAccessFlags().isStatic()) {
 				ClassNode outerCls = parentClass.getParentClass();
@@ -557,7 +557,7 @@ public class MethodNode extends LineAttrNode implements ILoadable {
 	public SSAVar makeNewSVar(int regNum, int version, @NotNull RegisterArg assignArg) {
 		SSAVar var = new SSAVar(regNum, version, assignArg);
 		if (sVars.isEmpty()) {
-			sVars = new ArrayList<SSAVar>();
+			sVars = new ArrayList<>();
 		}
 		sVars.add(var);
 		return var;
@@ -594,8 +594,14 @@ public class MethodNode extends LineAttrNode implements ILoadable {
 		this.region = region;
 	}
 
+	@Override
 	public DexNode dex() {
 		return parentClass.dex();
+	}
+
+	@Override
+	public RootNode root() {
+		return dex().root();
 	}
 
 	public MethodInfo getMethodInfo() {

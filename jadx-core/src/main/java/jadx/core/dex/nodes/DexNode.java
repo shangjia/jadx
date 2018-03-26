@@ -1,21 +1,10 @@
 package jadx.core.dex.nodes;
 
-import jadx.core.dex.info.ClassInfo;
-import jadx.core.dex.info.FieldInfo;
-import jadx.core.dex.info.InfoStorage;
-import jadx.core.dex.info.MethodInfo;
-import jadx.core.dex.instructions.args.ArgType;
-import jadx.core.utils.exceptions.DecodeException;
-import jadx.core.utils.files.InputFile;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import com.android.dex.ClassData;
 import com.android.dex.ClassData.Method;
@@ -27,29 +16,35 @@ import com.android.dex.FieldId;
 import com.android.dex.MethodId;
 import com.android.dex.ProtoId;
 import com.android.dex.TypeList;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-public class DexNode {
+import jadx.core.dex.info.ClassInfo;
+import jadx.core.dex.info.FieldInfo;
+import jadx.core.dex.info.MethodInfo;
+import jadx.core.dex.instructions.args.ArgType;
+import jadx.core.utils.files.DexFile;
+
+public class DexNode implements IDexNode {
 
 	public static final int NO_INDEX = -1;
 
 	private final RootNode root;
 	private final Dex dexBuf;
-	private final InputFile file;
+	private final DexFile file;
+	private final int dexId;
 
-	private final List<ClassNode> classes = new ArrayList<ClassNode>();
-	private final Map<ClassInfo, ClassNode> clsMap = new HashMap<ClassInfo, ClassNode>();
+	private final List<ClassNode> classes = new ArrayList<>();
+	private final Map<ClassInfo, ClassNode> clsMap = new HashMap<>();
 
-	private final Map<Object, FieldNode> constFields = new HashMap<Object, FieldNode>();
-
-	private final InfoStorage infoStorage = new InfoStorage();
-
-	public DexNode(RootNode root, InputFile input) {
+	public DexNode(RootNode root, DexFile input, int dexId) {
 		this.root = root;
 		this.file = input;
-		this.dexBuf = input.getDexBuffer();
+		this.dexBuf = input.getDexBuf();
+		this.dexId = dexId;
 	}
 
-	public void loadClasses() throws DecodeException {
+	public void loadClasses() {
 		for (ClassDef cls : dexBuf.classDefs()) {
 			ClassNode clsNode = new ClassNode(this, cls);
 			classes.add(clsNode);
@@ -59,7 +54,7 @@ public class DexNode {
 
 	void initInnerClasses() {
 		// move inner classes
-		List<ClassNode> inner = new ArrayList<ClassNode>();
+		List<ClassNode> inner = new ArrayList<>();
 		for (ClassNode cls : classes) {
 			if (cls.getClassInfo().isInner()) {
 				inner.add(cls);
@@ -155,15 +150,7 @@ public class DexNode {
 		return null;
 	}
 
-	public Map<Object, FieldNode> getConstFields() {
-		return constFields;
-	}
-
-	public InfoStorage getInfoStorage() {
-		return infoStorage;
-	}
-
-	public InputFile getInputFile() {
+	public DexFile getDexFile() {
 		return file;
 	}
 
@@ -195,7 +182,7 @@ public class DexNode {
 
 	public List<ArgType> readParamList(int parametersOffset) {
 		TypeList paramList = dexBuf.readTypeList(parametersOffset);
-		List<ArgType> args = new ArrayList<ArgType>(paramList.getTypes().length);
+		List<ArgType> args = new ArrayList<>(paramList.getTypes().length);
 		for (short t : paramList.getTypes()) {
 			args.add(getType(t));
 		}
@@ -210,8 +197,18 @@ public class DexNode {
 		return dexBuf.open(offset);
 	}
 
+	@Override
 	public RootNode root() {
 		return root;
+	}
+
+	@Override
+	public DexNode dex() {
+		return this;
+	}
+
+	public int getDexId() {
+		return dexId;
 	}
 
 	@Override

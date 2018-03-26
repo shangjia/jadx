@@ -1,15 +1,11 @@
 package jadx.gui.utils;
 
+import javax.swing.*;
+import java.net.URL;
+
 import jadx.core.dex.info.AccessInfo;
 import jadx.core.dex.instructions.args.ArgType;
 import jadx.core.utils.exceptions.JadxRuntimeException;
-
-import javax.swing.Action;
-import javax.swing.Icon;
-import javax.swing.ImageIcon;
-import javax.swing.JComponent;
-import javax.swing.KeyStroke;
-import java.net.URL;
 
 public class Utils {
 
@@ -112,5 +108,12 @@ public class Utils {
 
 	private static String format(long mem) {
 		return Long.toString((long) (mem / 1024. / 1024.)) + "MB";
+	}
+
+	/**
+	 * Adapt character case for case insensitive searches
+	 */
+	public static char caseChar(char ch, boolean toLower) {
+		return toLower ? Character.toLowerCase(ch) : ch;
 	}
 }

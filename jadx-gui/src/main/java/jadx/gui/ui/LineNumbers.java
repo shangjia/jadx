@@ -1,6 +1,6 @@
 package jadx.gui.ui;
 
-import javax.swing.JPanel;
+import javax.swing.*;
 import javax.swing.border.Border;
 import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
@@ -12,14 +12,7 @@ import javax.swing.text.BadLocationException;
 import javax.swing.text.Element;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.Utilities;
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Font;
-import java.awt.FontMetrics;
-import java.awt.Graphics;
-import java.awt.Insets;
-import java.awt.Point;
-import java.awt.Rectangle;
+import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.HashMap;
@@ -30,23 +23,23 @@ public class LineNumbers extends JPanel implements CaretListener {
 
 	private static final Border OUTER = new MatteBorder(0, 0, 0, 1, Color.LIGHT_GRAY);
 
-	private static final int HEIGHT = Integer.MAX_VALUE - 1000000;
-	private static final Color FOREGROUND = Color.GRAY;
-	private static final Color BACKGROUND = ContentArea.BACKGROUND;
+	private static final int NUM_HEIGHT = Integer.MAX_VALUE - 1000000;
+	private static final Color NUM_FOREGROUND = Color.GRAY;
+	private static final Color NUM_BACKGROUND = CodeArea.CODE_BACKGROUND;
 	private static final Color CURRENT_LINE_FOREGROUND = new Color(227, 0, 0);
 
-	private ContentArea contentArea;
+	private CodeArea codeArea;
 	private boolean useSourceLines = true;
 
 	private int lastDigits;
 	private int lastLine;
 	private Map<String, FontMetrics> fonts;
 
-	public LineNumbers(ContentArea component) {
-		this.contentArea = component;
+	public LineNumbers(CodeArea component) {
+		this.codeArea = component;
 		setFont(component.getFont());
-		setBackground(BACKGROUND);
-		setForeground(FOREGROUND);
+		setBackground(NUM_BACKGROUND);
+		setForeground(NUM_FOREGROUND);
 
 		setBorderGap(5);
 		setPreferredWidth();
@@ -70,7 +63,7 @@ public class LineNumbers extends JPanel implements CaretListener {
 	}
 
 	private void setPreferredWidth() {
-		Element root = contentArea.getDocument().getDefaultRootElement();
+		Element root = codeArea.getDocument().getDefaultRootElement();
 		int lines = root.getElementCount();
 		int digits = Math.max(String.valueOf(lines).length(), 3);
 		if (lastDigits != digits) {
@@ -82,7 +75,7 @@ public class LineNumbers extends JPanel implements CaretListener {
 
 			Dimension d = getPreferredSize();
 			if (d != null) {
-				d.setSize(preferredWidth, HEIGHT);
+				d.setSize(preferredWidth, NUM_HEIGHT);
 				setPreferredSize(d);
 				setSize(d);
 			}
@@ -92,26 +85,26 @@ public class LineNumbers extends JPanel implements CaretListener {
 	@Override
 	public void paintComponent(Graphics g) {
 		super.paintComponent(g);
-		FontMetrics fontMetrics = contentArea.getFontMetrics(contentArea.getFont());
+		FontMetrics fontMetrics = codeArea.getFontMetrics(codeArea.getFont());
 		Insets insets = getInsets();
 		int availableWidth = getSize().width - insets.left - insets.right;
 		Rectangle clip = g.getClipBounds();
-		int rowStartOffset = contentArea.viewToModel(new Point(0, clip.y));
-		int endOffset = contentArea.viewToModel(new Point(0, clip.y + clip.height));
+		int rowStartOffset = codeArea.viewToModel(new Point(0, clip.y));
+		int endOffset = codeArea.viewToModel(new Point(0, clip.y + clip.height));
 
 		while (rowStartOffset <= endOffset) {
 			try {
 				if (isCurrentLine(rowStartOffset)) {
 					g.setColor(CURRENT_LINE_FOREGROUND);
 				} else {
-					g.setColor(FOREGROUND);
+					g.setColor(NUM_FOREGROUND);
 				}
 				String lineNumber = getTextLineNumber(rowStartOffset);
 				int stringWidth = fontMetrics.stringWidth(lineNumber);
 				int x = availableWidth - stringWidth + insets.left;
 				int y = getOffsetY(rowStartOffset, fontMetrics);
 				g.drawString(lineNumber, x, y);
-				rowStartOffset = Utilities.getRowEnd(contentArea, rowStartOffset) + 1;
+				rowStartOffset = Utilities.getRowEnd(codeArea, rowStartOffset) + 1;
 			} catch (Exception e) {
 				break;
 			}
@@ -119,19 +112,19 @@ public class LineNumbers extends JPanel implements CaretListener {
 	}
 
 	private boolean isCurrentLine(int rowStartOffset) {
-		int caretPosition = contentArea.getCaretPosition();
-		Element root = contentArea.getDocument().getDefaultRootElement();
+		int caretPosition = codeArea.getCaretPosition();
+		Element root = codeArea.getDocument().getDefaultRootElement();
 		return root.getElementIndex(rowStartOffset) == root.getElementIndex(caretPosition);
 	}
 
 	protected String getTextLineNumber(int rowStartOffset) {
-		Element root = contentArea.getDocument().getDefaultRootElement();
+		Element root = codeArea.getDocument().getDefaultRootElement();
 		int index = root.getElementIndex(rowStartOffset);
 		Element line = root.getElement(index);
 		if (line.getStartOffset() == rowStartOffset) {
 			int lineNumber = index + 1;
 			if (useSourceLines) {
-				Integer sourceLine = contentArea.getSourceLine(lineNumber);
+				Integer sourceLine = codeArea.getSourceLine(lineNumber);
 				if (sourceLine != null) {
 					return String.valueOf(sourceLine);
 				}
@@ -143,7 +136,7 @@ public class LineNumbers extends JPanel implements CaretListener {
 	}
 
 	private int getOffsetY(int rowStartOffset, FontMetrics fontMetrics) throws BadLocationException {
-		Rectangle r = contentArea.modelToView(rowStartOffset);
+		Rectangle r = codeArea.modelToView(rowStartOffset);
 		if (r == null) {
 			throw new BadLocationException("Can't get Y offset", rowStartOffset);
 		}
@@ -154,9 +147,9 @@ public class LineNumbers extends JPanel implements CaretListener {
 			descent = fontMetrics.getDescent();
 		} else {
 			if (fonts == null) {
-				fonts = new HashMap<String, FontMetrics>();
+				fonts = new HashMap<>();
 			}
-			Element root = contentArea.getDocument().getDefaultRootElement();
+			Element root = codeArea.getDocument().getDefaultRootElement();
 			int index = root.getElementIndex(rowStartOffset);
 			Element line = root.getElement(index);
 			for (int i = 0; i < line.getElementCount(); i++) {
@@ -168,7 +161,7 @@ public class LineNumbers extends JPanel implements CaretListener {
 				FontMetrics fm = fonts.get(key);
 				if (fm == null) {
 					Font font = new Font(fontFamily, Font.PLAIN, fontSize);
-					fm = contentArea.getFontMetrics(font);
+					fm = codeArea.getFontMetrics(font);
 					fonts.put(key, fm);
 				}
 				descent = Math.max(descent, fm.getDescent());
@@ -179,8 +172,8 @@ public class LineNumbers extends JPanel implements CaretListener {
 
 	@Override
 	public void caretUpdate(CaretEvent e) {
-		int caretPosition = contentArea.getCaretPosition();
-		Element root = contentArea.getDocument().getDefaultRootElement();
+		int caretPosition = codeArea.getCaretPosition();
+		Element root = codeArea.getDocument().getDefaultRootElement();
 		int currentLine = root.getElementIndex(caretPosition);
 		if (lastLine != currentLine) {
 			repaint();

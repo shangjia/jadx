@@ -10,13 +10,17 @@ out/
 *.ipr
 *.iws
 
+**/.DS_Store
+
 bin/
 target/
 build/
+classes/
 idea/
 .gradle/
 gradle.properties
 
+jadx-output/
 *-tmp/
 
 *.dex

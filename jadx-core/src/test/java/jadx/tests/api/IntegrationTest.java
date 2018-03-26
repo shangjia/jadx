@@ -1,6 +1,19 @@
 package jadx.tests.api;
 
-import jadx.api.IJadxArgs;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.jar.JarOutputStream;
+
 import jadx.api.JadxArgs;
 import jadx.api.JadxDecompiler;
 import jadx.api.JadxInternalAccess;
@@ -15,27 +28,11 @@ import jadx.core.dex.nodes.RootNode;
 import jadx.core.dex.visitors.DepthTraversal;
 import jadx.core.dex.visitors.IDexTreeVisitor;
 import jadx.core.utils.exceptions.CodegenException;
-import jadx.core.utils.exceptions.JadxException;
-import jadx.core.utils.files.FileUtils;
 import jadx.tests.api.compiler.DynamicCompiler;
 import jadx.tests.api.compiler.StaticCompiler;
 import jadx.tests.api.utils.TestUtils;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.jar.JarOutputStream;
-
+import static jadx.core.utils.files.FileUtils.addFileToJar;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
@@ -51,8 +48,8 @@ public abstract class IntegrationTest extends TestUtils {
 	private static final String TEST_DIRECTORY = "src/test/java";
 	private static final String TEST_DIRECTORY2 = "jadx-core/" + TEST_DIRECTORY;
 
-	protected boolean outputCFG = false;
-	protected boolean isFallback = false;
+	private JadxArgs args;
+
 	protected boolean deleteTmpFiles = true;
 	protected boolean withDebugInfo = true;
 	protected boolean unloadCls = true;
@@ -63,6 +60,14 @@ public abstract class IntegrationTest extends TestUtils {
 
 	protected boolean compile = true;
 	private DynamicCompiler dynamicCompiler;
+
+	public IntegrationTest() {
+		args = new JadxArgs();
+		args.setOutDir(new File(outDir));
+		args.setShowInconsistentCode(true);
+		args.setThreadsCount(1);
+		args.setSkipResources(true);
+	}
 
 	public ClassNode getClassNode(Class<?> clazz) {
 		try {
@@ -76,15 +81,17 @@ public abstract class IntegrationTest extends TestUtils {
 	}
 
 	public ClassNode getClassNodeFromFile(File file, String clsName) {
-		JadxDecompiler d = new JadxDecompiler(getArgs());
+		JadxDecompiler d = null;
 		try {
-			d.loadFile(file);
-		} catch (JadxException e) {
+			args.setInputFiles(Collections.singletonList(file));
+			d = new JadxDecompiler(args);
+			d.load();
+		} catch (Exception e) {
 			e.printStackTrace();
 			fail(e.getMessage());
 		}
 		RootNode root = JadxInternalAccess.getRoot(d);
-		root.getResourcesNames().putAll(resMap);
+		root.getConstValues().getResourcesNames().putAll(resMap);
 
 		ClassNode cls = root.searchClassByName(clsName);
 		assertThat("Class not found: " + clsName, cls, notNullValue());
@@ -107,18 +114,18 @@ public abstract class IntegrationTest extends TestUtils {
 	}
 
 	private void decompile(JadxDecompiler jadx, ClassNode cls) {
-		List<IDexTreeVisitor> passes = Jadx.getPassesList(jadx.getArgs(), new File(outDir));
-		ProcessClass.process(cls, passes, new CodeGen(jadx.getArgs()));
+		List<IDexTreeVisitor> passes = Jadx.getPassesList(jadx.getArgs());
+		ProcessClass.process(cls, passes, new CodeGen());
 	}
 
 	private void decompileWithoutUnload(JadxDecompiler d, ClassNode cls) {
 		cls.load();
-		List<IDexTreeVisitor> passes = Jadx.getPassesList(d.getArgs(), new File(outDir));
+		List<IDexTreeVisitor> passes = Jadx.getPassesList(d.getArgs());
 		for (IDexTreeVisitor visitor : passes) {
 			DepthTraversal.visit(visitor, cls);
 		}
 		try {
-			new CodeGen(d.getArgs()).visit(cls);
+			new CodeGen().visit(cls);
 		} catch (CodegenException e) {
 			e.printStackTrace();
 			fail(e.getMessage());
@@ -134,17 +141,6 @@ public abstract class IntegrationTest extends TestUtils {
 					!mthNode.contains(AFlag.INCONSISTENT_CODE) && !mthNode.contains(AType.JADX_ERROR));
 		}
 		assertThat(cls.getCode().toString(), not(containsString("inconsistent")));
-	}
-
-	private IJadxArgs getArgs() {
-		JadxArgs args = new JadxArgs();
-		args.setCfgOutput(outputCFG);
-		args.setRawCFGOutput(outputCFG);
-		args.setFallbackMode(isFallback);
-		args.setShowInconsistentCode(true);
-		args.setThreadsCount(1);
-		args.setSkipResources(true);
-		return args;
 	}
 
 	private void runAutoCheck(String clsName) {
@@ -228,12 +224,12 @@ public abstract class IntegrationTest extends TestUtils {
 		return invoke(method, new Class<?>[0]);
 	}
 
-	public Object invoke(String method, Class[] types, Object... args) throws Exception {
+	public Object invoke(String method, Class<?>[] types, Object... args) throws Exception {
 		Method mth = getReflectMethod(method, types);
 		return invoke(mth, args);
 	}
 
-	public Method getReflectMethod(String method, Class... types) {
+	public Method getReflectMethod(String method, Class<?>... types) {
 		assertNotNull("dynamicCompiler not ready", dynamicCompiler);
 		try {
 			return dynamicCompiler.getMethod(method, types);
@@ -264,11 +260,11 @@ public abstract class IntegrationTest extends TestUtils {
 		assertThat("File list is empty", list, not(empty()));
 
 		File temp = createTempFile(".jar");
-		JarOutputStream jo = new JarOutputStream(new FileOutputStream(temp));
-		for (File file : list) {
-			FileUtils.addFileToJar(jo, file, path + "/" + file.getName());
+		try (JarOutputStream jo = new JarOutputStream(new FileOutputStream(temp))) {
+			for (File file : list) {
+				addFileToJar(jo, file, path + "/" + file.getName());
+			}
 		}
-		jo.close();
 		return temp;
 	}
 
@@ -300,7 +296,7 @@ public abstract class IntegrationTest extends TestUtils {
 	}
 
 	private List<File> getClassFilesWithInners(Class<?> cls) {
-		List<File> list = new ArrayList<File>();
+		List<File> list = new ArrayList<>();
 		String pkgName = cls.getPackage().getName();
 		URL pkgResource = ClassLoader.getSystemClassLoader().getResource(pkgName.replace('.', '/'));
 		if (pkgResource != null) {
@@ -339,17 +335,19 @@ public abstract class IntegrationTest extends TestUtils {
 		outTmp.deleteOnExit();
 		List<File> files = StaticCompiler.compile(compileFileList, outTmp, withDebugInfo);
 		// remove classes which are parents for test class
-		Iterator<File> iterator = files.iterator();
-		while (iterator.hasNext()) {
-			File next = iterator.next();
-			if (!next.getName().contains(cls.getSimpleName())) {
-				iterator.remove();
-			}
-		}
+		files.removeIf(next -> !next.getName().contains(cls.getSimpleName()));
 		for (File clsFile : files) {
 			clsFile.deleteOnExit();
 		}
 		return files;
+	}
+
+	public JadxArgs getArgs() {
+		return args;
+	}
+
+	public void setArgs(JadxArgs args) {
+		this.args = args;
 	}
 
 	public void setResMap(Map<Integer, String> resMap) {
@@ -361,7 +359,7 @@ public abstract class IntegrationTest extends TestUtils {
 	}
 
 	protected void setFallback() {
-		this.isFallback = true;
+		this.args.setFallbackMode(true);
 	}
 
 	protected void disableCompilation() {
@@ -375,7 +373,8 @@ public abstract class IntegrationTest extends TestUtils {
 	// Use only for debug purpose
 	@Deprecated
 	protected void setOutputCFG() {
-		this.outputCFG = true;
+		this.args.setCfgOutput(true);
+		this.args.setRawCFGOutput(true);
 	}
 
 	// Use only for debug purpose

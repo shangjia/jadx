@@ -1,6 +1,13 @@
 package jadx.core.dex.visitors;
 
-import jadx.api.IJadxArgs;
+import java.io.File;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.apache.commons.io.FilenameUtils;
+
+import jadx.api.JadxArgs;
 import jadx.core.Consts;
 import jadx.core.codegen.TypeGen;
 import jadx.core.deobf.Deobfuscator;
@@ -10,39 +17,38 @@ import jadx.core.dex.info.FieldInfo;
 import jadx.core.dex.info.MethodInfo;
 import jadx.core.dex.instructions.args.ArgType;
 import jadx.core.dex.nodes.ClassNode;
+import jadx.core.dex.nodes.DexNode;
 import jadx.core.dex.nodes.FieldNode;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.nodes.RootNode;
 import jadx.core.utils.exceptions.JadxException;
-
-import java.io.File;
-import java.util.HashSet;
-import java.util.Set;
-
-import org.apache.commons.io.IOCase;
+import jadx.core.utils.files.FileUtils;
+import jadx.core.utils.files.InputFile;
 
 public class RenameVisitor extends AbstractVisitor {
-
-	private static final boolean CASE_SENSITIVE_FS = IOCase.SYSTEM.isCaseSensitive();
 
 	private Deobfuscator deobfuscator;
 
 	@Override
 	public void init(RootNode root) {
-		IJadxArgs args = root.getArgs();
-
-		final String firstInputFileName = root.getDexNodes().get(0).getInputFile().getFile().getAbsolutePath();
-		final String inputPath = org.apache.commons.io.FilenameUtils.getFullPathNoEndSeparator(
-				firstInputFileName);
-		final String inputName = org.apache.commons.io.FilenameUtils.getBaseName(firstInputFileName);
+		List<DexNode> dexNodes = root.getDexNodes();
+		if (dexNodes.isEmpty()) {
+			return;
+		}
+		InputFile firstInputFile = dexNodes.get(0).getDexFile().getInputFile();
+		String firstInputFileName = firstInputFile.getFile().getAbsolutePath();
+		String inputPath = FilenameUtils.getFullPathNoEndSeparator(firstInputFileName);
+		String inputName = FilenameUtils.getBaseName(firstInputFileName);
 
 		File deobfMapFile = new File(inputPath, inputName + ".jobf");
-		deobfuscator = new Deobfuscator(args, root.getDexNodes(), deobfMapFile);
+		JadxArgs args = root.getArgs();
+		deobfuscator = new Deobfuscator(args, dexNodes, deobfMapFile);
 		boolean deobfuscationOn = args.isDeobfuscationOn();
 		if (deobfuscationOn) {
 			deobfuscator.execute();
 		}
-		checkClasses(root);
+		boolean isCaseSensitive = FileUtils.isCaseSensitiveFS(new File(inputPath)); // args.getOutDir() - not set in gui
+		checkClasses(root, isCaseSensitive);
 	}
 
 	@Override
@@ -55,11 +61,11 @@ public class RenameVisitor extends AbstractVisitor {
 		return false;
 	}
 
-	private void checkClasses(RootNode root) {
-		Set<String> clsNames = new HashSet<String>();
+	private void checkClasses(RootNode root, boolean caseSensitive) {
+		Set<String> clsNames = new HashSet<>();
 		for (ClassNode cls : root.getClasses(true)) {
 			checkClassName(cls);
-			if (!CASE_SENSITIVE_FS) {
+			if (!caseSensitive) {
 				ClassInfo classInfo = cls.getClassInfo();
 				String clsFileName = classInfo.getAlias().getFullPath();
 				if (!clsNames.add(clsFileName.toLowerCase())) {
@@ -93,7 +99,7 @@ public class RenameVisitor extends AbstractVisitor {
 	}
 
 	private void checkFields(ClassNode cls) {
-		Set<String> names = new HashSet<String>();
+		Set<String> names = new HashSet<>();
 		for (FieldNode field : cls.getFields()) {
 			FieldInfo fieldInfo = field.getFieldInfo();
 			if (!names.add(fieldInfo.getAlias())) {
@@ -103,7 +109,7 @@ public class RenameVisitor extends AbstractVisitor {
 	}
 
 	private void checkMethods(ClassNode cls) {
-		Set<String> names = new HashSet<String>();
+		Set<String> names = new HashSet<>();
 		for (MethodNode mth : cls.getMethods()) {
 			if (mth.contains(AFlag.DONT_GENERATE)) {
 				continue;

@@ -207,11 +207,13 @@ public class RegionGen extends InsnGen {
 		if (region.isConditionAtEnd()) {
 			code.startLine("do {");
 			makeRegionIndent(code, region.getBody());
-			code.startLine("} while (");
+			code.startLineWithNum(region.getConditionSourceLine());
+			code.add("} while (");
 			conditionGen.add(code, condition);
 			code.add(");");
 		} else {
-			code.startLine("while (");
+			code.startLineWithNum(region.getConditionSourceLine());
+			code.add("while (");
 			conditionGen.add(code, condition);
 			code.add(") {");
 			makeRegionIndent(code, region.getBody());
@@ -255,7 +257,7 @@ public class RegionGen extends InsnGen {
 						}
 					}
 				} else if (k instanceof Integer) {
-					code.add(TypeGen.literalToString((Integer) k, arg.getType()));
+					code.add(TypeGen.literalToString((Integer) k, arg.getType(), mth));
 				} else {
 					throw new JadxRuntimeException("Unexpected key in switch: " + (k != null ? k.getClass() : null));
 				}

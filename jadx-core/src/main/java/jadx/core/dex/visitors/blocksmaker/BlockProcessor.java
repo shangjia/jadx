@@ -292,7 +292,7 @@ public class BlockProcessor extends AbstractVisitor {
 				BlockNode loopEnd = loop.getEnd();
 				if (loopEnd.getPredecessors().size() > 1) {
 					boolean change = false;
-					List<BlockNode> nodes = new ArrayList<BlockNode>(loopEnd.getPredecessors());
+					List<BlockNode> nodes = new ArrayList<>(loopEnd.getPredecessors());
 					for (BlockNode pred : nodes) {
 						if (!pred.contains(AFlag.SYNTHETIC)) {
 							BlockSplitter.insertBlockBetween(mth, pred, loopEnd);
@@ -367,7 +367,8 @@ public class BlockProcessor extends AbstractVisitor {
 	}
 
 	private static void cleanExitNodes(MethodNode mth) {
-		for (Iterator<BlockNode> iterator = mth.getExitBlocks().iterator(); iterator.hasNext(); ) {
+		Iterator<BlockNode> iterator = mth.getExitBlocks().iterator();
+		while (iterator.hasNext()) {
 			BlockNode exitBlock = iterator.next();
 			if (exitBlock.getPredecessors().isEmpty()) {
 				mth.getBasicBlocks().remove(exitBlock);

@@ -1,5 +1,11 @@
 package jadx.gui.jobs;
 
+import java.util.List;
+
+import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import jadx.api.JavaClass;
 import jadx.core.codegen.CodeWriter;
 import jadx.gui.JadxWrapper;
@@ -11,27 +17,19 @@ import jadx.gui.utils.Utils;
 import jadx.gui.utils.search.StringRef;
 import jadx.gui.utils.search.TextSearchIndex;
 
-import java.util.List;
-
-import org.jetbrains.annotations.NotNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 public class IndexJob extends BackgroundJob {
 
 	private static final Logger LOG = LoggerFactory.getLogger(IndexJob.class);
 	private final CacheObject cache;
-	private final boolean useFastSearch;
 
-	public IndexJob(JadxWrapper wrapper, CacheObject cache, int threadsCount, boolean useFastSearch) {
+	public IndexJob(JadxWrapper wrapper, CacheObject cache, int threadsCount) {
 		super(wrapper, threadsCount);
-		this.useFastSearch = useFastSearch;
 		this.cache = cache;
 	}
 
 	protected void runJob() {
 		JNodeCache nodeCache = cache.getNodeCache();
-		final TextSearchIndex index = new TextSearchIndex(nodeCache, useFastSearch);
+		final TextSearchIndex index = new TextSearchIndex(nodeCache);
 		final CodeUsageInfo usageInfo = new CodeUsageInfo(nodeCache);
 		cache.setTextIndex(index);
 		cache.setUsageInfo(usageInfo);
@@ -72,9 +70,5 @@ public class IndexJob extends BackgroundJob {
 	@Override
 	public String getInfoString() {
 		return "Indexing: ";
-	}
-
-	public boolean isUseFastSearch() {
-		return useFastSearch;
 	}
 }

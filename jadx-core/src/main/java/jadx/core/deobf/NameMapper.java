@@ -13,8 +13,8 @@ public class NameMapper {
 	private static final Pattern VALID_JAVA_FULL_IDENTIFIER = Pattern.compile(
 			"(" + VALID_JAVA_IDENTIFIER + "\\.)*" + VALID_JAVA_IDENTIFIER);
 
-	private static final Set<String> RESERVED_NAMES = new HashSet<String>(
-			Arrays.asList(new String[]{
+	private static final Set<String> RESERVED_NAMES = new HashSet<>(
+			Arrays.asList(
 					"abstract",
 					"assert",
 					"boolean",
@@ -67,8 +67,8 @@ public class NameMapper {
 					"try",
 					"void",
 					"volatile",
-					"while",
-			})
+					"while"
+			)
 	);
 
 	public static boolean isReserved(String str) {
@@ -95,5 +95,8 @@ public class NameMapper {
 			}
 		}
 		return true;
+	}
+
+	private NameMapper() {
 	}
 }
